@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-Studio | Official Clock Edition</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050302;
+            font-family: 'Georgia', serif;
+        }
+        .container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+        /* Background image layer */
+        .bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('images/sfondo_main.jpg') center center / contain no-repeat;
+            z-index: 1;
+        }
+        /* Glow and Ambient Lighting Overlay */
+        .glow-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            background: radial-gradient(circle at 50% 45%, rgba(255, 215, 0, 0.18) 0%, rgba(255, 160, 0, 0.06) 55%, rgba(0, 0, 0, 0.6) 92%);
+            animation: pulseShimmer 5s infinite alternate ease-in-out;
+        }
+        @keyframes pulseShimmer {
+            0% { opacity: 0.7; }
+            100% { opacity: 1.0; }
+        }
+        /* Particle & Sparkle Canvas */
+        #effects-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            pointer-events: none;
+        }
+        
+        /* Clock Overlay Wrapper perfectly aligned to the image aspect ratio */
+        .clock-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: calc(100vh * (990 / 1100));
+            max-height: calc(100vw * (1100 / 990));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 4;
+            pointer-events: none;
+        }
+
+        /* Perfectly Centered Pivot point for the Clock Hands inside the G Logo frame */
+        .clock-overlay {
+            position: absolute;
+            top: 45.2%;
+            left: 50.0%;
+            transform: translate(-50%, -50%);
+            width: 72%;
+            height: 65%;
+            pointer-events: none;
+        }
+        .hand {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            border-radius: 6px;
+        }
+        /* Full-size Elegant Gold Hour Hand */
+        .hour-hand {
+            width: 14px;
+            height: 34%;
+            margin-left: -7px;
+            background: linear-gradient(90deg, #6e4e13 0%, #ffd700 40%, #fff6ba 50%, #ffd700 60%, #6e4e13 100%);
+            box-shadow: -4px 6px 16px rgba(0, 0, 0, 0.95), 0 0 14px rgba(255, 215, 0, 0.85);
+            clip-path: polygon(30% 0%, 70% 0%, 100% 100%, 0% 100%);
+            z-index: 10;
+        }
+        /* Full-size Elegant Gold Minute Hand */
+        .minute-hand {
+            width: 9px;
+            height: 48%;
+            margin-left: -4.5px;
+            background: linear-gradient(90deg, #7c5816 0%, #ffe885 50%, #7c5816 100%);
+            box-shadow: -4px 7px 18px rgba(0, 0, 0, 0.95), 0 0 16px rgba(255, 215, 0, 0.9);
+            clip-path: polygon(25% 0%, 75% 0%, 100% 100%, 0% 100%);
+            z-index: 11;
+        }
+        /* Full-size Golden Second Hand with Extended Glowing Trail */
+        .second-hand {
+            width: 4px;
+            height: 52%;
+            margin-left: -2px;
+            background: linear-gradient(0deg, #b8860b 0%, #ffffff 100%);
+            box-shadow: 0 0 16px #ffd700, 0 0 30px #d4af37;
+            z-index: 12;
+        }
+        /* Golden Trail Effect */
+        .second-hand::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: -30px;
+            width: 60px;
+            height: 100%;
+            background: conic-gradient(from 180deg at 50% 100%, rgba(255, 215, 0, 0.65) 0deg, rgba(255, 180, 0, 0.3) 22deg, transparent 45deg);
+            filter: blur(3px);
+            transform-origin: bottom center;
+            pointer-events: none;
+        }
+        /* Gold Center Cap */
+        .center-cap {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 32px;
+            height: 32px;
+            background: radial-gradient(circle, #fff7c2 0%, #d4af37 55%, #3a2505 100%);
+            border-radius: 50%;
+            z-index: 15;
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.95), 0 0 18px rgba(212, 175, 55, 1.0);
+            border: 3px solid #ffe894;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="bg-layer"></div>
+        <div class="glow-overlay"></div>
+        <canvas id="effects-canvas"></canvas>
+
+        <div class="clock-container">
+            <div class="clock-overlay">
+                <div class="hand hour-hand" id="hour"></div>
+                <div class="hand minute-hand" id="minute"></div>
+                <div class="hand second-hand" id="second"></div>
+                <div class="center-cap"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Real-Time Clock Engine
+        function updateClock() {
+            const now = new Date();
+            const ms = now.getMilliseconds();
+            const seconds = now.getSeconds() + ms / 1000;
+            const minutes = now.getMinutes() + seconds / 60;
+            const hours = (now.getHours() % 12) + minutes / 60;
+
+            document.getElementById('second').style.transform = `rotate(${seconds * 6}deg)`;
+            document.getElementById('minute').style.transform = `rotate(${minutes * 6}deg)`;
+            document.getElementById('hour').style.transform = `rotate(${hours * 30}deg)`;
+
+            requestAnimationFrame(updateClock);
+        }
+        requestAnimationFrame(updateClock);
+
+        // Advanced Floating Particle Engine (Organic Bokeh & Soft Floating Orbs)
+        const canvas = document.getElementById('effects-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const numParticles = 110;
+
+        class BokehParticle {
+            constructor() {
+                this.reset(true);
+            }
+
+            reset(initial = false) {
+                this.x = Math.random() * canvas.width;
+                this.y = initial ? Math.random() * canvas.height : canvas.height + Math.random() * 50;
+                this.radius = Math.random() * 5.5 + 1.2; // Multi-size depth (Bokeh effect)
+                this.baseAlpha = Math.random() * 0.6 + 0.2;
+                this.alpha = this.baseAlpha;
+                this.speedY = -(Math.random() * 0.5 + 0.15); // Smooth upward float
+                this.oscillation = Math.random() * Math.PI * 2;
+                this.oscillationSpeed = Math.random() * 0.015 + 0.005;
+                this.oscillationAmplitude = Math.random() * 0.6 + 0.2;
+                this.glow = Math.random() * 15 + 5;
+                
+                // Color palette: Warm golden yellow, amber, white light accents
+                const goldTones = [
+                    'rgba(255, 223, 110, ',
+                    'rgba(255, 198, 40, ',
+                    'rgba(255, 245, 190, ',
+                    'rgba(218, 165, 32, '
+                ];
+                this.colorBase = goldTones[Math.floor(Math.random() * goldTones.length)];
+            }
+
+            update() {
+                this.y += this.speedY;
+                this.oscillation += this.oscillationSpeed;
+                this.x += Math.sin(this.oscillation) * this.oscillationAmplitude;
+
+                // Subtle twinkling pulse
+                this.alpha = this.baseAlpha + Math.sin(this.oscillation * 2) * 0.15;
+
+                // Reset when floating off top
+                if (this.y < -30 || this.x < -30 || this.x > canvas.width + 30) {
+                    this.reset(false);
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                
+                // Radial gradient for realistic soft glowing orb (bokeh flare)
+                const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2);
+                grad.addColorStop(0, `${this.colorBase}${Math.min(1, Math.max(0, this.alpha))})`);
+                grad.addColorStop(0.5, `${this.colorBase}${Math.max(0, this.alpha * 0.4)})`);
+                grad.addColorStop(1, `${this.colorBase}0)`);
+
+                ctx.fillStyle = grad;
+                ctx.shadowBlur = this.glow;
+                ctx.shadowColor = '#ffd700';
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Initialize Bokeh Particles
+        for (let i = 0; i < numParticles; i++) {
+            particles.push(new BokehParticle());
+        }
+
+        // Sparkling Star / Lens Flare Effect
+        const sparkles = [];
+        const numSparkles = 20;
+
+        for (let i = 0; i < numSparkles; i++) {
+            sparkles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 10 + 4,
+                alpha: 0,
+                maxAlpha: Math.random() * 0.8 + 0.2,
+                fadeSpeed: Math.random() * 0.015 + 0.005,
+                state: 'in'
+            });
+        }
+
+        function drawSparkle(x, y, size, alpha) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.fillStyle = `rgba(255, 252, 220, ${alpha})`;
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = '#ffe066';
+
+            ctx.beginPath();
+            ctx.moveTo(0, -size);
+            ctx.quadraticCurveTo(0, 0, size, 0);
+            ctx.quadraticCurveTo(0, 0, 0, size);
+            ctx.quadraticCurveTo(0, 0, -size, 0);
+            ctx.quadraticCurveTo(0, 0, 0, -size);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw floating organic Bokeh particles
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // 2. Draw sparkling flares
+            sparkles.forEach(s => {
+                if (s.state === 'in') {
+                    s.alpha += s.fadeSpeed;
+                    if (s.alpha >= s.maxAlpha) s.state = 'out';
+                } else {
+                    s.alpha -= s.fadeSpeed;
+                    if (s.alpha <= 0) {
+                        s.alpha = 0;
+                        s.x = Math.random() * canvas.width;
+                        s.y = Math.random() * canvas.height;
+                        s.maxAlpha = Math.random() * 0.8 + 0.2;
+                        s.state = 'in';
+                    }
+                }
+
+                if (s.alpha > 0) {
+                    drawSparkle(s.x, s.y, s.size, s.alpha);
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
